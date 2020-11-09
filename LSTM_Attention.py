@@ -87,6 +87,57 @@ def convertNetOutput(ratingOutput, categoryOutput):
 ################################################################################
 ###################### The following determines the model ######################
 ################################################################################
+class Attention(tnn.Module):
+    def __init__(self, hidden_size, batch_first=False):
+        super(Attention, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.batch_first = batch_first
+
+        self.att_weights = tnn.Parameter(torch.Tensor(1, hidden_size), requires_grad=True)
+
+        stdv = 1.0 / np.sqrt(self.hidden_size)
+        for weight in self.att_weights:
+            tnn.init.uniform_(weight, -stdv, stdv)
+
+    def get_mask(self):
+        pass
+
+    def forward(self, inputs, lengths):
+        if self.batch_first:
+            batch_size, max_len = inputs.size()[:2]
+        else:
+            max_len, batch_size = inputs.size()[:2]
+            
+        # apply attention layer
+        weights = torch.bmm(inputs,
+                            self.att_weights  # (1, hidden_size)
+                            .permute(1, 0)  # (hidden_size, 1)
+                            .unsqueeze(0)  # (1, hidden_size, 1)
+                            .repeat(batch_size, 1, 1) # (batch_size, hidden_size, 1)
+                            )
+    
+        attentions = torch.softmax(F.relu(weights.squeeze()), dim=-1)
+
+        # create mask based on the sentence lengths
+        mask = torch.ones(attentions.size(), requires_grad=True).cuda()
+        for i, l in enumerate(lengths):  # skip the first sentence
+            if l < max_len:
+                mask[i, l:] = 0
+
+        # apply mask and renormalize attention scores (weights)
+        masked = attentions * mask
+        _sums = masked.sum(-1).unsqueeze(-1)  # sums per row
+        
+        attentions = masked.div(_sums)
+
+        # apply attention weights
+        weighted = torch.mul(inputs, attentions.unsqueeze(-1).expand_as(inputs))
+
+        # get the final fixed vector representations of the sentences
+        representations = weighted.sum(1).squeeze()
+
+        return representations, attentions
 
 lstm_hidden_size = 128
 lstm_layers = 1
@@ -112,7 +163,7 @@ class network(tnn.Module):
                             batch_first=True,
                             bidirectional=True)
         self.drop = tnn.Dropout(p=0.5)
-#         self.attention = Attention(lstm_hidden_size*2, batch_first=True)
+        self.attention = Attention(lstm_hidden_size*2, batch_first=True)
 
         self.rating_fc = tnn.Linear(2*lstm_hidden_size, 1)
         self.category_fc = tnn.Linear(2*lstm_hidden_size, 5)
@@ -126,18 +177,19 @@ class network(tnn.Module):
         x, _ = self.lstm(packed_input)
         
         x, lengths = pad_packed_sequence(x, batch_first=True)   
-#         x, _ = self.attention(x, lengths) # [30, 256]
+        x, _ = self.attention(x, lengths) # skip connect
+        # [30, 256]
         '''
         These also produce outputs of variable length, 
         but if you want to feed information into linear or other fixed size layers 
         then the last output / hidden state of an RNN can be used, 
         e.g. using a tensor slice to select the last element of a sequence.
         '''        
-        out_forward = x[range(len(x)), length - 1, :lstm_hidden_size]
-        out_reverse = x[:, 0, lstm_hidden_size:]
-        out_reduced = torch.cat((out_forward, out_reverse), 1)    
+#         out_forward = x[range(len(x)), length - 1, :lstm_hidden_size]
+#         out_reverse = x[:, 0, lstm_hidden_size:]
+#         out_reduced = torch.cat((out_forward, out_reverse), 1)    
         
-        x = self.drop(out_reduced)
+#         x = self.drop(out_reduced)
         
         # Rating
         rating_out = self.rating_fc(x)
