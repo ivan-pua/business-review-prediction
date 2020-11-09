@@ -1,0 +1,8 @@
+.vector_cache/
+.ipynb_checkpoints/
+__pycache__
+Models/
+hw2.zip
+savedModel.pth
+test.ipynb
+.DS_Store
