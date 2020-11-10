@@ -6,6 +6,42 @@ Group    : very big brains (g023473)
 Members  : Ming Xuan CHUA z5159352, Qie Shang PUA z5157686
 Course   : UNSW COMP9444 Neural Networks and Deep Learning
 
+Before developing the model, the review text is preprocessed by removing
+punctuations and replacing specific symbols. Stopwords are also added by
+referring to the NLTK corpus. The review text is tokenized and embedded
+using GloVe with a vector dimension of 300. For this model, a Bidirectional LSTM
+is chosen because they are capable of learning long-term dependencies,
+hence suitable for analysing a long review text. The vector embeddings
+are passed through the Bi-LSTM layer. Then, the last hidden state of the
+Bi-LSTM layer is passed into two different fully connected (linear) layers,
+followed by their respective activation functions, to generate two output
+tensors - rating and category. To convert the network’s output to the
+predicted labels, rating output is rounded to 0 or 1, whereas the index of the
+highest value in the category tensor is selected.  For the loss function,
+binary cross entropy is assigned for rating whereas cross entropy is chosen
+for category. Both loss functions are ideal candidates for classification tasks. 
+
+Initially, a LSTM model is developed as a base model. Then, several design
+improvements are incorporated into the base model and have proven to work,
+including:
+-   Using a bidirectional LSTM instead of uni-directional to obtain better
+    context of the review text
+-   Replacing SGD with Adam Optimiser, with a learning rate of 0.001
+-   Increasing word vector size from 50 to 300 to represent the semantics better
+-   Adding Dropout layer to prevent overfitting 
+-   Preprocessing Data
+
+However, some methods were unable to boost the accuracy, such as:
+-   Attention Layer; it increased the score by 1% but consumed a lot of
+    computational time and resources
+-   Having more than 1 Bi- LSTM layer
+-   Adding more Linear layers
+-   Word Lemmatization 
+
+Overall, this model is successful as it consistently achieves a weighted score
+of 85% within 5 epochs.
+
+
 """
 
 # Import packages
