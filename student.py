@@ -6,24 +6,19 @@ Group    : very big brains (g023473)
 Members  : Ming Xuan CHUA z5159352, Qie Shang PUA z5157686
 Course   : UNSW COMP9444 Neural Networks and Deep Learning
 
-
-
 """
 
+# Import packages
 import torch
 import torch.nn as tnn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 import torch.optim as toptim
 from torchtext.vocab import GloVe
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 import re
-import nltk
 import numpy as np
-nltk.download('stopwords') # Download stopwords from NLTK  
-from nltk.corpus import stopwords
 from config import device
-
 
 ################################################################################
 ##### The following determines the processing of input data (review text) ######
@@ -33,15 +28,10 @@ def tokenise(sample):
     """
     Called before any processing of the text has occurred.
     """
-    # https://piazza.com/class/kf3o1qjasxgxn?cid=237
-    sample = re.sub('[!?.,@#$%\^*();:/~<>]', '', sample)
-    sample = sample.replace('-', ' ')
-    sample = sample.replace("&", 'and')
-    processed = sample.split()
-
-#     lemmatizer=WordNetLemmatizer()
-#     for word in processed:
-#         word = lemmatizer.lemmatize(word)
+    sample = re.sub('[!?.,@#$%\^*();:/~<>]', '', sample) # remove punctuations
+    sample = sample.replace('-', ' ') # replace 
+    sample = sample.replace("&", 'and') # replace
+    processed = sample.split() # tokenise
         
     return processed
 
@@ -50,8 +40,6 @@ def preprocessing(sample):
     Called after tokenising but before numericalising.
 
     """
-    
-#     print(sample)
     return sample
 
 def postprocessing(batch, vocab):
@@ -61,7 +49,11 @@ def postprocessing(batch, vocab):
     
     return batch
 
-stopWords = stopwords.words('english') # from NLTK
+
+# Stopwords are obtained from the latest NLTK corpus
+stopWords = ['i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers', 'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should', "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"]
+
+# Longer embedding size represents the semantics better, hence 300
 word_len = 300
 wordVectors = GloVe(name='6B', dim=word_len)
 
@@ -77,10 +69,12 @@ def convertNetOutput(ratingOutput, categoryOutput):
     rating, and 0, 1, 2, 3, or 4 for the business category.  If your network
     outputs a different representation convert the output here.
     """
+    # obtain index with the maximum probability, representing the predicted category 
     _, categoryOutput = torch.max(categoryOutput.data, 1)
     
-    #round to 0 or 1
+    # sigmoid output is rounded to 0 or 1, representing a bad or good rating, respectively
     ratingOutput = torch.round(ratingOutput)
+    
     # return as long tensor
     return ratingOutput.long(), categoryOutput.long()
 
@@ -102,52 +96,61 @@ class network(tnn.Module):
 
     def __init__(self):
         super(network, self).__init__()
-
-        # Don't need this layer because embedding is done by GloVe
-        # self.embedding = nn.Embedding(len(text_field.vocab), 300)
         
+        # Bi-directional LSTM 
         self.lstm = tnn.LSTM(input_size=word_len,
                             hidden_size=lstm_hidden_size,
                             num_layers=lstm_layers,
                             batch_first=True,
                             bidirectional=True)
         self.drop = tnn.Dropout(p=0.5)
-#         self.attention = Attention(lstm_hidden_size*2, batch_first=True)
+        
+        """
+        Bi-LSTM + Attention is attempted but did not yield significant 
+        improvements in accuracy, and it took a very long time. 
+        Hence, a Bi-LSTM model is used instead
+        """
+        # self.attention = Attention(lstm_hidden_size*2, batch_first=True)
 
         self.rating_fc = tnn.Linear(2*lstm_hidden_size, 1)
         self.category_fc = tnn.Linear(2*lstm_hidden_size, 5)
 
     def forward(self, input, length):
         
-        # https://towardsdatascience.com/lstm-text-classification-using-pytorch-2c6c657f8fc0
-        # Dynamic Padding - not sure if needed?
-        packed_input = pack_padded_sequence(input, length, batch_first=True, enforce_sorted=False)
+        """
+        Packing the inputs enables the LSTM model to ignore the padded elements,
+        therefore not calculating gradients for the padded values 
+        during backpropagation
+        """
         
-        x, _ = self.lstm(packed_input)
+        x = pack_padded_sequence(input, length, batch_first=True) 
         
-        x, lengths = pad_packed_sequence(x, batch_first=True)   
-#         x, _ = self.attention(x, lengths) # [30, 256]
-        '''
-        These also produce outputs of variable length, 
-        but if you want to feed information into linear or other fixed size layers 
-        then the last output / hidden state of an RNN can be used, 
-        e.g. using a tensor slice to select the last element of a sequence.
-        '''        
-        out_forward = x[range(len(x)), length - 1, :lstm_hidden_size]
-        out_reverse = x[:, 0, lstm_hidden_size:]
-        out_reduced = torch.cat((out_forward, out_reverse), 1)    
+        x, (hidden, cn) = self.lstm(x)
+
+        """
+        The forward network of the last LSTM layer (hidden[-1, :, :]) 
+        contains information about previous inputs, 
+        whereas the backward network (hidden[-2, :, :]) 
+        contains information about following inputs.
+        We take the last hidden state of the forward output and 
+        the last hidden state of the backward output and merge them together.
+        """
         
-        x = self.drop(out_reduced)
+        x_cat = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        x = self.drop(x_cat) # To prevent overfitting
         
-        # Rating
+        """
+        The same input (x) is shared for both ratings and category 
+        """
+        
+        # Rating FC Layer
         rating_out = self.rating_fc(x)
         rating_out = torch.squeeze(rating_out) # remove dim with 1  
         rating_out = torch.sigmoid(rating_out) 
         
-        # Category
-        cat_out = self.category_fc(x)
-        # Adding one more FC layer does not improve the category accuracy
-        cat_out = F.relu(cat_out)
+        # Category FC Layer
+        cat_out = self.category_fc(x)        
+        cat_out = F.relu(cat_out) 
         
         return rating_out, cat_out
         
@@ -155,7 +158,6 @@ class loss(tnn.Module):
     """
     Class for creating the loss function.  The labels and outputs from your
     network will be passed to the forward method during training.
-    https://discuss.pytorch.org/t/how-to-combine-multiple-criterions-to-a-loss-function/348/7
     """
 
     def __init__(self):
@@ -163,7 +165,11 @@ class loss(tnn.Module):
 
     def forward(self, ratingOutput, categoryOutput, ratingTarget, categoryTarget):
         
-        # Do not round to 0 or 1 here, only convert in the convertNetOutput method for Accuracy
+        """
+        BCELoss is good for binary classification --- ratings 
+        Cross Entropy Loss is good for multi-class classification --- category
+        Both losses are added to get the total loss in the model
+        """
         rating_loss = F.binary_cross_entropy(ratingOutput.float(), ratingTarget.float())
         cat_loss = F.cross_entropy(categoryOutput, categoryTarget)
         
