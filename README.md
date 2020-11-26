@@ -7,7 +7,8 @@
 ## Input
 The dataset consists of 50,000 reviews from different categories and sentiment.
 Each review comes in the following JSON format:
-{"businessCategory": 0, "rating": 1, "reviewText": "By far the cleanest restaurant I've been to (including kitchen). The owner is a fantastic guy and always very attentive to the needs of the customers. Food is quite good and consistent."}
+
+`{"businessCategory": 0, "rating": 1, "reviewText": "By far the cleanest restaurant I've been to (including kitchen). The owner is a fantastic guy and always very attentive to the needs of the customers. Food is quite good and consistent."}`
 
 ## LSTM Model 
 Before developing the model, the review text is preprocessed by removing punctuations and replacing specific symbols. Stopwords are also added by referring to the NLTK corpus. The review text is tokenized and embedded using GloVe with a vector dimension of 300. For this model, a Bidirectional LSTM is chosen because they are capable of learning long-term dependencies, hence suitable for analysing a long review text. The vector embeddings are passed through the Bi-LSTM layer. Then, the last hidden state of the Bi-LSTM layer is passed into two different fully connected (linear) layers, followed by their respective activation functions, to generate two output tensors - rating and category. To convert the network’s output to the predicted labels, rating output is rounded to 0 or 1, whereas the index of the highest value in the category tensor is selected.  For the loss function, binary cross entropy is assigned for rating whereas cross entropy is chosen for category. Both loss functions are ideal candidates for classification tasks. 
@@ -20,14 +21,14 @@ Initially, a LSTM model is developed as a base model. Then, several design impro
 -   Preprocessing Data
 
 However, some methods were unable to boost the accuracy, such as:
--   Having more than 1 Bi- LSTM layer
+-   Having more than 1 Bi-LSTM layer
 -   Adding more Linear layers
 -   Word Lemmatization 
 
 ## LSTM + Attention
-Adding an Attention Layer increased the score by 1% but consumed a lot of computational time and resources. Hence, based on the Ockham's razor's theorem, Bi-LSTM is chosen instead.
+This model is similar to the LSTM model aforementioned, but with an additional attention layer. Incorporating an Attention Layer increased the score by 1% but consumed a lot of computational time and resources. Hence, LSTM model is chosen to train the data based on Ockham Razor's theorem,.
 
 ## Results
-Overall, the Bi-LSTM model is successful as it consistently achieves a weighted score of 85% within 5 epochs.
+Overall, the LSTM model successfully achieved the aim because it consistently obtained a weighted score of 85% within 5 epochs.
 
-Code written by: UNSW, Ming Xuan CHUA and Qie Shang PUA 
+**Code written by: UNSW, Ming Xuan CHUA and Qie Shang PUA**
