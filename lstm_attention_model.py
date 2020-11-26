@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """
-student.py
-
-Group    : very big brains (g023473)
-Members  : Ming Xuan CHUA z5159352, Qie Shang PUA z5157686
-Course   : UNSW COMP9444 Neural Networks and Deep Learning
-
-
-
+This model uses LSTM and Attention to predict the 
+ratings and category of a business review
 """
 
 import torch
@@ -33,15 +27,11 @@ def tokenise(sample):
     """
     Called before any processing of the text has occurred.
     """
-    # https://piazza.com/class/kf3o1qjasxgxn?cid=237
+
     sample = re.sub('[!?.,@#$%\^*();:/~<>]', '', sample)
     sample = sample.replace('-', ' ')
     sample = sample.replace("&", 'and')
     processed = sample.split()
-
-#     lemmatizer=WordNetLemmatizer()
-#     for word in processed:
-#         word = lemmatizer.lemmatize(word)
         
     return processed
 
@@ -51,7 +41,6 @@ def preprocessing(sample):
 
     """
     
-#     print(sample)
     return sample
 
 def postprocessing(batch, vocab):
@@ -170,27 +159,39 @@ class network(tnn.Module):
 
     def forward(self, input, length):
         
-        # https://towardsdatascience.com/lstm-text-classification-using-pytorch-2c6c657f8fc0
-        # Dynamic Padding - not sure if needed?
-        packed_input = pack_padded_sequence(input, length, batch_first=True, enforce_sorted=False)
+        """
+        Packing the inputs enables the LSTM model to ignore the padded elements,
+        therefore not calculating gradients for the padded values 
+        during backpropagation
+        """
         
-        x, _ = self.lstm(packed_input)
+        x = pack_padded_sequence(input, length, batch_first=True) 
+        
+        x, (hidden, cn) = self.lstm(x)
+
+        """
+        The forward network of the last LSTM layer (hidden[-1, :, :]) 
+        contains information about previous inputs, 
+        whereas the backward network (hidden[-2, :, :]) 
+        contains information about following inputs.
+        We take the last hidden state of the forward output and 
+        the last hidden state of the backward output and merge them together.
+        """
+        
+        x_cat = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+#         sx = self.drop(x_cat) # To prevent overfitting
+        
         
         x, lengths = pad_packed_sequence(x, batch_first=True)   
         x, _ = self.attention(x, lengths) # skip connect
-        # [30, 256]
+        
         '''
         These also produce outputs of variable length, 
         but if you want to feed information into linear or other fixed size layers 
         then the last output / hidden state of an RNN can be used, 
         e.g. using a tensor slice to select the last element of a sequence.
         '''        
-#         out_forward = x[range(len(x)), length - 1, :lstm_hidden_size]
-#         out_reverse = x[:, 0, lstm_hidden_size:]
-#         out_reduced = torch.cat((out_forward, out_reverse), 1)    
-        
-#         x = self.drop(out_reduced)
-        
+
         # Rating
         rating_out = self.rating_fc(x)
         rating_out = torch.squeeze(rating_out) # remove dim with 1  

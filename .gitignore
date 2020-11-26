@@ -1,7 +1,7 @@
 .vector_cache/
 .ipynb_checkpoints/
 __pycache__
-Models/
+Results/
 hw2.zip
 savedModel.pth
 test.ipynb

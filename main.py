@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
-hw2main.py
+Main file to train and test model
 
 UNSW COMP9444 Neural Networks and Deep Learning
 
-DO NOT MODIFY THIS FILE
 """
 
 import torch
 from torchtext import data
 
 from config import device
-import student
+import lstm_attention_model as lstm_model
 
 def main():
     print("Using device: {}"
@@ -19,10 +18,10 @@ def main():
 
     # Load the training dataset, and create a dataloader to generate a batch.
     textField = data.Field(lower=True, include_lengths=True, batch_first=True,
-                           tokenize=student.tokenise,
-                           preprocessing=student.preprocessing,
-                           postprocessing=student.postprocessing,
-                           stop_words=student.stopWords)
+                           tokenize=lstm_model.tokenise,
+                           preprocessing=lstm_model.preprocessing,
+                           postprocessing=lstm_model.postprocessing,
+                           stop_words=lstm_model.stopWords)
     labelField = data.Field(sequential=False, use_vocab=False, is_target=True)
 
     dataset = data.TabularDataset('train.json', 'json',
@@ -30,30 +29,30 @@ def main():
                                   'rating': ('rating', labelField),
                                   'businessCategory': ('businessCategory', labelField)})
 
-    textField.build_vocab(dataset, vectors=student.wordVectors)
+    textField.build_vocab(dataset, vectors=lstm_model.wordVectors)
 
     # Allow training on the entire dataset, or split it for training and validation.
-    if student.trainValSplit == 1:
+    if lstm_model.trainValSplit == 1:
         trainLoader = data.BucketIterator(dataset, shuffle=True,
-                                          batch_size=student.batchSize,
+                                          batch_size=lstm_model.batchSize,
                                           sort_key=lambda x: len(x.reviewText),
                                           sort_within_batch=True)
     else:
-        train, validate = dataset.split(split_ratio=student.trainValSplit)
+        train, validate = dataset.split(split_ratio=lstm_model.trainValSplit)
 
         trainLoader, valLoader = data.BucketIterator.splits((train, validate),
                                                             shuffle=True,
-                                                            batch_size=student.batchSize,
+                                                            batch_size=lstm_model.batchSize,
                                                             sort_key=lambda x: len(x.reviewText),
                                                             sort_within_batch=True)
 
-    # Get model and optimiser from student.
-    net = student.net.to(device)
-    lossFunc = student.lossFunc
-    optimiser = student.optimiser
+    # Get model and optimiser from lstm_model.py
+    net = lstm_model.net.to(device)
+    lossFunc = lstm_model.lossFunc
+    optimiser = lstm_model.optimiser
 
     # Train.
-    for epoch in range(student.epochs):
+    for epoch in range(lstm_model.epochs):
         runningLoss = 0
 
         for i, batch in enumerate(trainLoader):
@@ -91,7 +90,7 @@ def main():
           "Model saved to savedModel.pth")
 
     # Test on validation data if it exists.
-    if student.trainValSplit != 1:
+    if lstm_model.trainValSplit != 1:
         net.eval()
 
         correctRatingOnlySum = 0
@@ -106,7 +105,7 @@ def main():
                 businessCategory = batch.businessCategory.to(device)
 
                 # Convert network output to integer values.
-                ratingOutputs, categoryOutputs = student.convertNetOutput(*net(inputs, length))
+                ratingOutputs, categoryOutputs = lstm_model.convertNetOutput(*net(inputs, length))
 
                 # Calculate performance
                 correctRating = rating == ratingOutputs.flatten()
@@ -137,8 +136,9 @@ def main():
                                               correctRatingOnlyPercent,
                                               correctCategoryOnlyPercent,
                                               bothCorrectPercent, score))
-        # Delete this section later!!!
-        print(f"\n----Settings----\nEpochs:{student.epochs}\nBatch-size:{student.batchSize}\nTraining Ratio={student.trainValSplit}\nOptimiser={student.optimiser}\nWord Vector Dim={student.word_len}\nBi-LSTM\nNum layers = {student.lstm_layers}\nHidden Size={student.lstm_hidden_size}\n")
+        
+        # Settings
+        print(f"\n----Settings----\nEpochs:{lstm_model.epochs}\nBatch-size:{lstm_model.batchSize}\nTraining Ratio={lstm_model.trainValSplit}\nOptimiser={lstm_model.optimiser}\nWord Vector Dim={lstm_model.word_len}\nBi-LSTM\nNum layers = {lstm_model.lstm_layers}\nHidden Size={lstm_model.lstm_hidden_size}\n")
         
         total_params = sum(p.numel() for p in net.parameters())
         trainable_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
